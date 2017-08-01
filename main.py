@@ -111,16 +111,25 @@ def create_linked_list(text):
     return lst
 
 
-def comment_to_reply(last_comment, player1, player2):
-
-    if "blah" in last_comment and last_comment:
-        player1.attack()
-    if "blah" in last_comment:
-        player2.defend()
-    if player1.hp <=0:
-        return "He ded"
-    if player2.hp <=0:
-        return 'He ded'
+def comment_to_reply(last_comment, player1, player2, command):
+    # I attack for 5
+    # I defend for 3
+    if "attack" in last_comment[1]:
+        damage = player1.attack(last_comment[1].split()[2])
+        return last_comment[0] + " has damaged:" + damage
+    if "defend" in last_comment[1]:
+        if last_comment[0] == player1.id:
+            damage = player1.defend(last_comment[1].split()[2],command[1].body[command[1].body.find("damaged:")+1:])
+            if player1.hp < 1:
+                return player1.id + " is dead."
+            else:
+                return player1.id + " has been damaged " + damage
+        if last_comment[0] == player2.id:
+            damage = player2.defend(last_comment[1].split()[2],command[1].body[command[1].body.find("damaged:")+1:])
+            if player2.hp < 1:
+                return player2.id + " is dead."
+            else:
+                return player2.id + " has been damaged " + damage
 
 
 
@@ -131,36 +140,45 @@ def bot_login():
     return r
 
 def begin_game(r):
+    # list of ids
     list_ids = []
+    # list of comments
     list_comments = []
+    # list of player 1
     list_player1 = []
+    # list of player2
     list_player2 = []
     for (id, comments, player1, player2) in cur:
+        # fill in the lists from the database.
         list_ids.append(id)
         list_comments.append(comments)
         list_player1.append(comments)
         list_player2.append(comments)
-
+    # check all the comments in the subreddit. Will need to use recursion later.
     for comment in r.subreddit("test").comments(limit=25):
-        if  comment.body in list_ids:
+        # if id matches up.
+        if  comment.body.split()[0] in list_ids:
             id = comment.body.split()[0]
-            infos = cur.execute("SELECT comments, player1, player 2 from battles where id=%s" % (comment.body))
+            infos = cur.execute("SELECT comments, player1, player 2 from battles where id=%s" % id)
             player1 = Player(infos[1])
             player2 = Player(infos[2])
-            comments = create_linked_list(infos[0])
-            current_comment = go_to_current(comment, comments)
-            hp_change(comments, player1, player2)
+            linked_commments = create_linked_list(infos[0])
+            # this is the current comment (by the bot)
+            current_comment = go_to_current(comment, linked_commments)
+            # change hp
+            hp_change(linked_commments, player1, player2)
 
-            lsst = current_comment[1].replies
-            added_comment = None
-            for comment in lsst:
-                if "Continued game:" in comment and comment.author.name == player1.id or comment.author.name == player2.id:
-                    added_comment = (comment.author.name, comment)
-            what_to_reply = comment_to_reply(added_comment, player1, player2)
-            added_comment[1].reply(what_to_reply)
+            # list of replies
+            replies = current_comment[1].replies
+            correct_reply = None
+            for reply in replies:
+                if "Continued game:" in reply.body and reply.author.name == player1.id or reply.author.name == player2.id:
+                    correct_reply = (reply.author.name, reply.body)
+            what_to_reply = comment_to_reply(correct_reply, player1, player2, current_comment)
+            correct_reply[1].reply(what_to_reply)
             #add data
 
-            updated_comment = infos[0] + added_comment[0] + "%" + added_comment[1].body + "$" + "com%" + what_to_reply + "$"
+            updated_comment = infos[0] + correct_reply[0] + "%" + correct_reply[1].body + "$" + "com%" + what_to_reply + "$"
             cur.execute("""
                UPDATE battles
                SET id=%s, comments=%s, player1=%s, player2=%s
