@@ -93,18 +93,18 @@ def go_to_current(first_reddit_comment, comments):
 
     @param praw.models.Comment first_reddit_comment:
     @param Comment_Linked_List comments:
-    @rtype: (string, string)
+    @rtype: (string, praw.models.Comment)
     """
     cur_comment = comments.front
 
     def _private(first_reddit_comment, cur_comment):
-        for reddit_comment in first_reddit_comment.replies:
-            if cur_comment.text == reddit_comment.body:
-                if comments.back.comment == reddit_comment.body and comments.back.user == cur_comment.author.name:
-                    tuple_ = (reddit_comment.author.name, reddit_comment)
-                    return tuple_
-                else:
-                    cur_comment = cur_comment.next
+        if first_reddit_comment.body == cur_comment.comment:
+            if comments.back.comment == first_reddit_comment.body and comments.back.user == cur_comment.user:
+                tuple_ = (first_reddit_comment.author.name, first_reddit_comment)
+                return tuple_
+            else:
+                cur_comment = cur_comment.next
+                for reddit_comment in first_reddit_comment.replies:
                     return _private(reddit_comment, cur_comment)
         return None
     return _private(first_reddit_comment, cur_comment)
@@ -138,22 +138,22 @@ def comment_to_reply(last_comment, player1, player2, command):
     """
     # I attack for 5
     # I defend for 3
-    if "attack" in last_comment[1]:
-        damage = player1.attack(last_comment[1].split()[2])
-        return last_comment[0] + " has damaged:" + damage
-    if "defend" in last_comment[1]:
-        if last_comment[0] == player1.id:
-            damage = player1.defend(last_comment[1].split()[2],command[1].body[command[1].body.find("damaged:")+1:])
+    if "attack" in last_comment.body:
+        damage = player1.attack(last_comment.body.split()[-1])
+        return last_comment.author.name + " has damaged:" + str(damage)
+    if "defend" in last_comment.body:
+        if last_comment.author.name == player1.id:
+            damage = player1.defend(last_comment.body.split()[-1],command[1].body[command[1].body.find("damaged:")+1:])
             if player1.hp < 1:
                 return player1.id + " is dead."
             else:
-                return player1.id + " has been damaged " + damage
-        if last_comment[0] == player2.id:
-            damage = player2.defend(last_comment[1].split()[2],command[1].body[command[1].body.find("damaged:")+1:])
+                return player1.id + " has been damaged " + str(damage)
+        if last_comment.author.name == player2.id:
+            damage = player2.defend(last_comment.body.split()[-1],command[1].body[command[1].body.find("damaged:")+1:])
             if player2.hp < 1:
                 return player2.id + " is dead."
             else:
-                return player2.id + " has been damaged " + damage
+                return player2.id + " has been damaged " + str(damage)
 
 
 
@@ -205,20 +205,27 @@ def check_comment(comment, list_ids, list_comments, list_player1, list_player2):
         current_comment = go_to_current(comment, linked_commments)
         # change hp
         hp_change(linked_commments, player1, player2)
-
+        print("current: " + current_comment[1].body)
         # list of replies
         if current_comment is None:
+            print("test..")
             return None
         replies = current_comment[1].replies
         correct_reply = None
         for reply in replies:
+            print("player1:  " + player1.id)
+            print("player2:  " + player2.id)
+            print("reply user:  " + reply.author.name)
+
+            print(reply.body)
             if "Continued game:" in reply.body and reply.author.name == player1.id or reply.author.name == player2.id:
-                correct_reply = (reply.author.name, reply.body)
+                correct_reply = reply
+                print("test")
         what_to_reply = comment_to_reply(correct_reply, player1, player2, current_comment)
-        correct_reply[1].reply(what_to_reply)
+        correct_reply.reply(what_to_reply)
         # add data
 
-        updated_comment = list_comments[num] + correct_reply[0] + "%" + correct_reply[1].body + "$" + "com%" + what_to_reply + "$"
+        updated_comment = list_comments[num] + correct_reply.author.name + "%" + correct_reply.body + "$" + "com%" + what_to_reply + "$"
         cur.execute("""
                    UPDATE battles
                    SET id=%s, comments=%s, player1=%s, player2=%s
@@ -257,8 +264,8 @@ def begin_game(r):
         # fill in the lists from the database.
         list_ids.append(id)
         list_comments.append(comments)
-        list_player1.append(comments)
-        list_player2.append(comments)
+        list_player1.append(player1)
+        list_player2.append(player2)
     for id in list_ids:
         print(id)
     cur2.close()
