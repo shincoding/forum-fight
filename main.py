@@ -226,11 +226,9 @@ def check_comment(comment, list_ids, list_comments, list_player1, list_player2):
         # add data
 
         updated_comment = list_comments[num] + correct_reply.author.name + "%" + correct_reply.body + "$" + "com%" + what_to_reply + "$"
-        cur.execute("""
-                   UPDATE battles
-                   SET id=%s, comments=%s, player1=%s, player2=%s
-                   WHERE id='%s'
-                """, (comment.body, updated_comment, list_player1[num], list_player2[num], comment.body))
+
+        sql = "Update battles SET id=%s, comments=%s, player1=%s, player2=%s WHERE id=%s"
+        cur.execute(sql, (comment.body, updated_comment, list_player1[num], list_player2[num], comment.body))
 
     if "I initiate the reddit game:" in comment.body:
         code = comment.fullname
