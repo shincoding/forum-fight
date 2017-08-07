@@ -68,7 +68,7 @@ class Player:
         return abs(defend_value-int_attack_Value)
 
 
-def hp_change(comments, player1, player2):
+def hp_change(comment, player1, player2):
     """ Change hp.
 
     @param Comment_Linked_List comments:
@@ -76,19 +76,17 @@ def hp_change(comments, player1, player2):
     @param Player player2:
     @rtype: None
     """
-    cur_comment = comments.front
-    while cur_comment is not None:
-        if "damaged" in cur_comment.comment and player1 in cur_comment.comment:
-            player1.hp -= cur_comment.comment.split()[-1]
-        if "damaged" in cur_comment.comment and player2 in cur_comment.comment:
-            player2.hp -= cur_comment.comment.split()[-1]
-        cur_comment = cur_comment.next
+
+    if "damaged" in comment and player1.id in comment:
+        player1.hp -= int(comment.split()[-1])
+    if "damaged" in comment and player2.id in comment:
+        player2.hp -= int(comment.split()[-1])
 
     return None
 
 
 
-def go_to_current(first_reddit_comment, comments):
+def go_to_current(first_reddit_comment, comments, player1, player2):
     """ Go th current comment (bot).
 
     @param praw.models.Comment first_reddit_comment:
@@ -98,13 +96,15 @@ def go_to_current(first_reddit_comment, comments):
     cur_comment = comments.front
 
     def _private(first_reddit_comment, cur_comment):
-        if first_reddit_comment.body == cur_comment.comment:
-            if comments.back.comment == first_reddit_comment.body and comments.back.user == cur_comment.user:
+        if first_reddit_comment.fullname == cur_comment.comment:
+            if comments.back.comment == first_reddit_comment.fullname and comments.back.user == cur_comment.user:
                 tuple_ = (first_reddit_comment.author.name, first_reddit_comment)
+                hp_change(first_reddit_comment.body, player1, player2)
                 return tuple_
             else:
                 cur_comment = cur_comment.next
                 for reddit_comment in first_reddit_comment.replies:
+                    hp_change(first_reddit_comment.body, player1, player2)
                     return _private(reddit_comment, cur_comment)
         return None
     return _private(first_reddit_comment, cur_comment)
@@ -140,7 +140,7 @@ def comment_to_reply(last_comment, player1, player2, command):
     # I defend for 3
     if "attack" in last_comment.body:
         damage = player1.attack(last_comment.body.split()[-1])
-        return last_comment.author.name + " has damaged:" + str(damage)
+        return last_comment.author.name + " has damaged: " + str(damage)
     if "defend" in last_comment.body:
         if last_comment.author.name == player1.id:
             damage = player1.defend(last_comment.body.split()[-1],command[1].body[command[1].body.find("damaged:")+1:])
@@ -178,8 +178,7 @@ def recursion_comments(first_comments, list_ids, list_comments, list_player1, li
     @rtype: None
     """
     for comment in first_comments.replies:
-        if comment.body == "I attack 3":
-            print("xx")
+
         check_comment(comment, list_ids, list_comments, list_player1, list_player2)
         recursion_comments(comment, list_ids, list_comments, list_player1, list_player2)
 
@@ -191,20 +190,25 @@ def check_comment(comment, list_ids, list_comments, list_player1, list_player2):
     @param list list_ids:
     @rtype: None
     """
+    print("Check:  " + comment.body)
+    cur = conn.cursor()
+
     if comment.fullname in list_ids:
         return None
 
     # if id matches up.
     if comment.body.split()[0] in list_ids:
         id = comment.body.split()[0]
+
         num = list_ids.index(id)
         player1 = Player(list_player1[num])
         player2 = Player(list_player2[num])
         linked_commments = create_linked_list(list_comments[num])
         # this is the current comment (by the bot)
-        current_comment = go_to_current(comment, linked_commments)
+        current_comment = go_to_current(comment, linked_commments, player1, player2)
+        if current_comment is None:
+            return None
         # change hp
-        hp_change(linked_commments, player1, player2)
         print("current: " + current_comment[1].body)
         # list of replies
         if current_comment is None:
@@ -218,27 +222,40 @@ def check_comment(comment, list_ids, list_comments, list_player1, list_player2):
             print("reply user:  " + reply.author.name)
 
             print(reply.body)
-            if "Continued game:" in reply.body and reply.author.name == player1.id or reply.author.name == player2.id:
+            if "Continued game:" in reply.body and reply.author.name == player1.id or reply.author.name == player2.id and current_comment[1].body.split()[1] != reply.author.name:
+                print("1231231: " + current_comment[1].body.split()[1] )
                 correct_reply = reply
                 print("test")
-        what_to_reply = comment_to_reply(correct_reply, player1, player2, current_comment)
-        correct_reply.reply(what_to_reply)
+        if correct_reply is None:
+            return None
+        sql = "select comments from battles WHERE id=%s"
+        cur.execute(sql, comment.body.split()[0])
+        for row in cur:
+            print("Asdffas" + row[0])
+            if correct_reply.fullname in row[0]:
+                print("132: " + row[0])
+                print("152: " + comment.body)
+
+                print("asdfasaafsad")
+                return None
+        what_to_reply = id + " " + comment_to_reply(correct_reply, player1, player2, current_comment)
+        what_to_reply_comment = correct_reply.reply(what_to_reply)
         # add data
 
-        updated_comment = list_comments[num] + correct_reply.author.name + "%" + correct_reply.body + "$" + "com%" + what_to_reply + "$"
-
-        sql = "Update battles SET id=%s, comments=%s, player1=%s, player2=%s WHERE id=%s"
-        cur.execute(sql, (comment.body, updated_comment, list_player1[num], list_player2[num], comment.body))
+        updated_comment = list_comments[num] + correct_reply.author.name + "%" + correct_reply.fullname + "$" + "comp%" + what_to_reply_comment.fullname + "$"
+        print("updated ::::" + updated_comment)
+        sql = "update battles SET id=%s, comments=%s, player1=%s, player2=%s WHERE id=%s"
+        cur.execute(sql, (comment.body.split()[0], updated_comment, list_player1[num], list_player2[num], comment.body.split()[0]))
 
     if "I initiate the reddit game:" in comment.body:
         code = comment.fullname
         chosen = comment.body[comment.body.find(":") + 1:]
-        comment_for_add = "comp%" + code + " begin game.$"
+        replied_comment = comment.reply(code + " begin game.")
+        comment_for_add = "comp%" + replied_comment.fullname + "$"
         sql = "insert into battles (id, comments, player1, player2) VALUES('%s', '%s', '%s', '%s')" % \
               (code, comment_for_add, comment.author.name, chosen)
         cur.execute(sql)
-        comment.reply(code + " begin game.")
-
+        print("zz + " + replied_comment.fullname)
     conn.commit()
 
 
@@ -268,10 +285,14 @@ def begin_game(r):
         print(id)
     cur2.close()
     # check all the comments in the subreddit. Will need to use recursion later.
-    for comment in r.subreddit("test").comments(limit=25):
-        comment.refresh()
-        check_comment(comment, list_ids, list_comments, list_player1, list_player2)
-        recursion_comments(comment, list_ids, list_comments, list_player1, list_player2)
+
+
+    for submission in r.subreddit('test').hot(limit=10):
+        submission.comments.replace_more(limit=None, threshold=0)
+        for comment in submission.comments.list():
+            check_comment(comment, list_ids, list_comments, list_player1, list_player2)
+            #recursion_comments(comment, list_ids, list_comments, list_player1, list_player2)
+
 
 r = bot_login()
 begin_game(r)
