@@ -1,4 +1,4 @@
-username = "forum_fight_bot"
-password = "thisisapassword123"
-client_id = "6u37eKWWXiH9xg"
-client_secret = "aG-Oy_xjXQDFULkRCPyjjRvdI7E"
+username = "REDDIT USER NAME"
+password = "REDDIT PASSWORD"
+client_id = "CLIENT ID"
+client_secret = "CLIENT SECRET ID"

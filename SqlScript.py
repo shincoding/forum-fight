@@ -1,8 +1,14 @@
 import praw
 import config
 import random
-import pyrebase
-import firebaseController
+import pymysql
+
+conn = pymysql.connect("HOST", "USER", "PASSWORD", "DB")
+
+cur = conn.cursor()
+cur.execute("SELECT id, comments, player1, player2 FROM battles")
+
+
 
 class Comment_Link_Node:
     """ Initialze Linked List Node.
@@ -180,6 +186,7 @@ def check_comment(comment, list_ids, list_comments_codes, list_player1, list_pla
     @param list list_ids:
     @rtype: None
     """
+    cur = conn.cursor()
     # if the comment does not initiate the game
     if comment.fullname in list_ids:
         return None
@@ -190,8 +197,11 @@ def check_comment(comment, list_ids, list_comments_codes, list_player1, list_pla
         chosen = chosen.strip()
         replied_comment = comment.reply(code + " begin game. " + chosen + " proceed.")
         comment_for_add = "comp%" + replied_comment.fullname + "$"
-        firebaseController.addData(code, comment_for_add, comment.author.name, chosen)
+        sql = "insert into battles (id, comments, player1, player2) VALUES('%s', '%s', '%s', '%s')" % \
+              (code, comment_for_add, comment.author.name, chosen)
+        cur.execute(sql)
         print("zz + " + replied_comment.fullname)
+        conn.commit()
         return None
 
     # if id matches up.
@@ -226,8 +236,12 @@ def check_comment(comment, list_ids, list_comments_codes, list_player1, list_pla
                 correct_reply = reply
         if correct_reply is None:
             return None
-        if correct_reply.fullname in firebaseController.getComments(comment.body.split()[0]):
-            return None
+        sql = "select comments from battles WHERE id=%s"
+        cur.execute(sql, comment.body.split()[0])
+        for row in cur:
+            # if already replied
+            if correct_reply.fullname in row[0]:
+                return None
         what_to_reply = None
         if correct_reply.author.name == player1.id:
             what_to_reply = id + " " + comment_to_reply(correct_reply, player1, player2) + " " + player2.id + " proceed."
@@ -239,7 +253,9 @@ def check_comment(comment, list_ids, list_comments_codes, list_player1, list_pla
         # add data
 
         updated_comment = list_comments_codes[num] + correct_reply.author.name + "%" + correct_reply.fullname + "$" + "comp%" + what_to_reply_comment.fullname + "$"
-        firebaseController.updateData(comment.body.split()[0], updated_comment, list_player1[num], list_player2[num])
+        sql = "update battles SET id=%s, comments=%s, player1=%s, player2=%s WHERE id=%s"
+        cur.execute(sql, (comment.body.split()[0], updated_comment, list_player1[num], list_player2[num], comment.body.split()[0]))
+        conn.commit()
         return None
 
 
@@ -258,13 +274,17 @@ def begin_game(r):
     list_player1 = []
     # list of player2
     list_player2 = []
-    for data in firebaseController.getData():
-        list_ids.append(data.key())
-        list_comments_codes.append(data.val().get("comments"))
-        list_player1.append(data.val().get("player1"))
-        list_player2.append(data.val().get("player2"))
+    cur2 = conn.cursor()
+    cur2.execute("SELECT id, comments, player1, player2 FROM battles")
+    for (id, comments, player1, player2) in cur2:
+        # fill in the lists from the database.
+        list_ids.append(id)
+        list_comments_codes.append(comments)
+        list_player1.append(player1)
+        list_player2.append(player2)
     for id in list_ids:
         print(id)
+    cur2.close()
     # check all the comments in the subreddit. Not using recursion at the moment.
     for submission in r.subreddit('test').hot(limit=10):
         submission.comments.replace_more(limit=None, threshold=0)
@@ -274,3 +294,7 @@ def begin_game(r):
 
 r = bot_login()
 begin_game(r)
+
+
+cur.close()
+conn.close()
