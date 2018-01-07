@@ -31,7 +31,11 @@ def updateData(id, comments, player1, player2):
   db.child("battles").child(id).update(data)
 
 def getData():
-  db = authentication()
+  try:
+    db = authentication()
+  except Exception:
+    print("Cannot establish database connection.")
+    return None
   return db.child("battles").get().each()
 
 def getComments(id):
