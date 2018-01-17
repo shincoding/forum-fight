@@ -1,6 +1,6 @@
 import praw
 import config
-from Game import *
+from game import *
 
 
 def begin_game(r):
