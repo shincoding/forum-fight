@@ -193,46 +193,34 @@ def check_comment(comment, list_ids, list_comments_codes, list_player1, list_pla
 
     if "I initiate the reddit game:" in comment.body:
         code = comment.fullname
-        chosen = comment.body[comment.body.find(":") + 1:]
-        chosen = chosen.strip()
-        replied_comment = comment.reply(code + " begin game. " + chosen + " proceed.")
-        comment_for_add = "comp%" + replied_comment.fullname + "$"
+        chosen = comment.body[comment.body.find(":") + 1:].strip()
+        REPLY_BY_BOT = comment.reply(code + " begin game. " + chosen + " proceed.")
+        REPLY_DATA = "comp%" + REPLY_BY_BOT.fullname + "$"
         sql = "insert into battles (id, comments, player1, player2) VALUES('%s', '%s', '%s', '%s')" % \
-              (code, comment_for_add, comment.author.name, chosen)
+              (code, REPLY_DATA, comment.author.name, chosen)
         cur.execute(sql)
-        print("zz + " + replied_comment.fullname)
         conn.commit()
         return None
 
     # if id matches up.
     if comment.body.split()[0] in list_ids:
-        id = comment.body.split()[0]
-
-        num = list_ids.index(id)
-        player1 = Player(list_player1[num])
-        player2 = Player(list_player2[num])
-        linked_commments = create_linked_list(list_comments_codes[num])
+        # the first word in the comment represents the id of the game
+        ID = comment.body.split()[0]
+        ARRAY_POSITION = list_ids.index(ID)
+        player1 = Player(list_player1[ARRAY_POSITION])
+        player2 = Player(list_player2[ARRAY_POSITION])
+        linked_commments = create_linked_list(list_comments_codes[ID])
         # this is the current comment (by the bot)
         current_comment = go_to_current(comment, linked_commments, player1, player2)
-        print("current:  " + current_comment[1].body)
         if current_comment is None:
             return None
-        # Print the change of hp
-        print("Player 1 hp: " + str(player1.hp))
-        print("Player 2 hp: " + str(player2.hp))
         # list of replies
         if current_comment is None:
             return None
         replies = current_comment[1].replies
         correct_reply = None
         for reply in replies:
-            print("replies:  " + reply.body)
-            print("replies ::" + reply.author.name)
-            print("player1 ::" + player1.id)
-            print("player2 ::" + player2.id)
-
             if "Continued game:" in reply.body and (reply.author.name == player1.id or reply.author.name == player2.id) and current_comment[1].body.split()[-2] == reply.author.name:
-                print("zzz")
                 correct_reply = reply
         if correct_reply is None:
             return None
@@ -242,19 +230,17 @@ def check_comment(comment, list_ids, list_comments_codes, list_player1, list_pla
             # if already replied
             if correct_reply.fullname in row[0]:
                 return None
-        what_to_reply = None
         if correct_reply.author.name == player1.id:
-            what_to_reply = id + " " + comment_to_reply(correct_reply, player1, player2) + " " + player2.id + " proceed."
+            REPLY_BY_BOT = correct_reply.reply(id + " " + comment_to_reply(correct_reply,
+                                                                    player1, player2) + " " + player2.id + " proceed.")
         else:
-            what_to_reply = id + " " + comment_to_reply(correct_reply, player1, player2) + " " + player1.id + " proceed."
-
-        # now the script has left a comment underneath the correct reply.
-        what_to_reply_comment = correct_reply.reply(what_to_reply)
+            REPLY_BY_BOT = correct_reply.reply(id + " " + comment_to_reply(correct_reply, player1, player2) + " " +
+                                        player1.id + " proceed.")
         # add data
 
-        updated_comment = list_comments_codes[num] + correct_reply.author.name + "%" + correct_reply.fullname + "$" + "comp%" + what_to_reply_comment.fullname + "$"
+        REPLY_DATA = list_comments_codes[ARRAY_POSITION] + correct_reply.author.name + "%" + correct_reply.fullname + "$" + "comp%" + REPLY_BY_BOT.fullname + "$"
         sql = "update battles SET id=%s, comments=%s, player1=%s, player2=%s WHERE id=%s"
-        cur.execute(sql, (comment.body.split()[0], updated_comment, list_player1[num], list_player2[num], comment.body.split()[0]))
+        cur.execute(sql, (comment.body.split()[0], REPLY_DATA, list_player1[ARRAY_POSITION], list_player2[ARRAY_POSITION], comment.body.split()[0]))
         conn.commit()
         return None
 
@@ -282,8 +268,6 @@ def begin_game(r):
         list_comments_codes.append(comments)
         list_player1.append(player1)
         list_player2.append(player2)
-    for id in list_ids:
-        print(id)
     cur2.close()
     # check all the comments in the subreddit. Not using recursion at the moment.
     for submission in r.subreddit('test').hot(limit=10):
