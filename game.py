@@ -1,5 +1,5 @@
-from Player import Player
-from Comment_Linked_List import Comment_Linked_List
+from player import Player
+from comment_Linked_List import Comment_Linked_List
 import firebaseController
 
 
